@@ -214,23 +214,30 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       `srtp://${address}:${videoPort}?rtcpport=${videoPort}&localrtcpport=${returnVideoPort}&pkt_size=${mtu}`,
     ];
 
+    const videoEncoder = [
+      '-c:v',
+      this.ffmpegCodec,
+      ...(this.ffmpegCodec === 'libx264' ? ['-preset', 'ultrafast', '-tune', 'zerolatency'] : []),
+    ];
+    const videoFormat = this.ffmpegCodec === 'h264_vaapi' ? ['-vf', 'format=nv12,hwupload'] : ['-pix_fmt', 'yuv420p'];
+    const vaapiDevice = this.ffmpegCodec === 'h264_vaapi' ? ['-vaapi_device', '/dev/dri/renderD128'] : [];
+
     if (!this.camera.info.properties['streaming.enabled']) {
       return [
+        ...vaapiDevice,
         '-loop',
         '1',
         '-i',
         join(__dirname, `../images/offline.jpg`),
-        '-c:v',
-        this.ffmpegCodec,
-        ...(this.ffmpegCodec === 'libx264' ? ['-preset', 'ultrafast', '-tune', 'zerolatency'] : []),
-        '-pix_fmt',
-        'yuv420p',
+        ...videoEncoder,
+        ...videoFormat,
         '-an',
         ...output,
       ];
     }
 
     return [
+      ...vaapiDevice,
       '-f',
       'h264',
       '-use_wallclock_as_timestamps',
@@ -239,9 +246,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       '15',
       '-i',
       'pipe:',
-      '-c:v',
-      this.ffmpegCodec,
-      ...(this.ffmpegCodec === 'libx264' ? ['-preset', 'ultrafast', '-tune', 'zerolatency'] : []),
+      ...videoEncoder,
       '-bf',
       '0',
       '-b:v',
@@ -250,8 +255,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       `${bitrate}k`,
       '-maxrate',
       `${2 * bitrate}k`,
-      '-pix_fmt',
-      'yuv420p',
+      ...videoFormat,
       '-an',
       ...output,
     ];

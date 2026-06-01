@@ -8,6 +8,12 @@
 
 View your Nest cams in HomeKit using [Homebridge](https://github.com/homebridge/homebridge) with this plugin.
 
+## Fork Summary
+- This fork adds VAAPI hardware-encoding support for systems whose FFmpeg exposes the `h264_vaapi` encoder.
+- Set `"ffmpegCodec": "h264_vaapi"` to have stream video commands use `/dev/dri/renderD128` and upload frames with `format=nv12,hwupload`.
+- The default remains `"libx264"`, so existing software-encoding installs keep the original behavior unless the codec option is changed.
+- This change is specifically FreeBSD-focused, but it should also work on Linux hosts where VAAPI hardware H.264 encoding is available through FFmpeg.
+
 [![NPM](https://nodei.co/npm/homebridge-nest-cam.png?compact=true)](https://nodei.co/npm/homebridge-nest-cam/)
 
 [![PayPal](https://img.shields.io/badge/paypal-donate-blue?logo=paypal)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=CEYYGVB7ZZ764&item_name=homebridge-nest-cam&currency_code=USD&source=url)
@@ -36,7 +42,30 @@ View your Nest cams in HomeKit using [Homebridge](https://github.com/homebridge/
 4. Login with [homebridge-config-ui-x](https://www.npmjs.com/package/homebridge-config-ui-x) or use the [manual authentication method](https://github.com/Brandawg93/homebridge-nest-cam/wiki/Manual-Authentication).
 
 ### FFmpeg
-By default, `libx264` is used as the h264 encoder. If you would like to use a hardware-accelerated encoder instead, refer to the [h264 Hardware Encoders Wiki](https://github.com/Brandawg93/homebridge-nest-cam/wiki/h264-Hardware-Encoders).
+By default, `libx264` is used as the h264 encoder. This fork adds FreeBSD-focused `h264_vaapi` support for VAAPI hardware encoding when the selected FFmpeg binary includes that encoder. The same configuration should also work on Linux when `/dev/dri/renderD128` exists and is accessible to Homebridge.
+
+When `"ffmpegCodec": "h264_vaapi"` is configured, the stream command adds:
+
+```
+-vaapi_device /dev/dri/renderD128
+-vf format=nv12,hwupload
+-c:v h264_vaapi
+```
+
+Example:
+
+```
+{
+    "platform": "Nest-cam",
+    "options": {
+      "ffmpegCodec": "h264_vaapi",
+      "pathToFfmpeg": "/usr/local/bin/ffmpeg"
+    },
+    "refreshToken": "1//01T_..."
+}
+```
+
+The VAAPI path must exist on the host running Homebridge, and the Homebridge process must have permission to open it. If FFmpeg does not list `h264_vaapi` in `ffmpeg -codecs`, keep using `libx264` or another supported encoder. For other hardware encoders, refer to the [h264 Hardware Encoders Wiki](https://github.com/Brandawg93/homebridge-nest-cam/wiki/h264-Hardware-Encoders).
 
 ### Setting up the Config.json
 #### refreshToken
