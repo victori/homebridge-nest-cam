@@ -14,6 +14,7 @@ import { NestConfig } from './nest/types/config';
 import { auth, old_auth, nest_auth, getCameras } from './nest/connection';
 import { NestSession } from './nest/session';
 import { NestAccessory } from './accessory';
+import { SnapshotHttpServer } from './snapshot-server';
 
 class Options {
   motionDetection = true;
@@ -60,6 +61,7 @@ class NestCamPlatform implements DynamicPlatformPlugin {
   private readonly nestObjects: Array<NestObject> = [];
   private structures: Array<string> = [];
   private cameras: Array<string> = [];
+  private snapshotHttpServer?: SnapshotHttpServer;
 
   constructor(log: Logging, config: PlatformConfig, api: API) {
     this.log = log;
@@ -317,6 +319,35 @@ class NestCamPlatform implements DynamicPlatformPlugin {
     });
   }
 
+  private startSnapshotHttpServer(): void {
+    const snapshotPort = this.config.options?.snapshotPort;
+    const snapshotToken = this.config.options?.snapshotToken;
+
+    if (!snapshotPort && !snapshotToken) {
+      return;
+    }
+
+    if (!snapshotPort || !snapshotToken) {
+      this.log.warn('Both options.snapshotPort and options.snapshotToken are required to enable the snapshot endpoint.');
+      return;
+    }
+
+    const snapshotHost = this.config.options?.snapshotHost || '0.0.0.0';
+    this.snapshotHttpServer = new SnapshotHttpServer({
+      host: snapshotHost,
+      port: snapshotPort,
+      token: snapshotToken,
+      log: this.log,
+      getSnapshot: async (uuid: string, height: number): Promise<Buffer | undefined> => {
+        const obj = this.nestObjects.find((nestObject) => nestObject.camera.info.uuid === uuid);
+        if (obj) {
+          return await obj.camera.getSnapshot(height);
+        }
+      },
+    });
+    this.snapshotHttpServer.start();
+  }
+
   async getAccessToken(): Promise<string> {
     const { refreshToken, googleAuth, nest_token } = this.config;
     const ft = this.config.options?.fieldTest || false;
@@ -356,6 +387,7 @@ class NestCamPlatform implements DynamicPlatformPlugin {
       await this.addCameras(cameras);
       await this.setupMotionServices();
       this.cleanupAccessories();
+      this.startSnapshotHttpServer();
       const session = new NestSession(this.config, this.log);
       const cameraObjects = this.nestObjects.map((x) => x.camera);
       await session.subscribe(cameraObjects);
@@ -365,6 +397,7 @@ class NestCamPlatform implements DynamicPlatformPlugin {
   }
 
   isShuttingDown(): void {
+    this.snapshotHttpServer?.stop();
     const accessoryObjects = this.nestObjects.map((x) => x.accessory);
     this.api.updatePlatformAccessories(accessoryObjects);
   }

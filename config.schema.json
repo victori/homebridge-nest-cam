@@ -155,6 +155,25 @@
             "type": "string"
           }
         },
+        "snapshotHost": {
+          "title": "Snapshot Endpoint Host",
+          "description": "Host/IP address for the optional remote snapshot HTTP endpoint. Use 0.0.0.0 to listen on all interfaces.",
+          "type": "string",
+          "default": "0.0.0.0",
+          "placeholder": "0.0.0.0"
+        },
+        "snapshotPort": {
+          "title": "Snapshot Endpoint Port",
+          "description": "Port for the optional remote snapshot HTTP endpoint. Requires Snapshot Endpoint Token.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "snapshotToken": {
+          "title": "Snapshot Endpoint Token",
+          "description": "Required token for the optional remote snapshot HTTP endpoint. Send it as a token query parameter or Bearer token.",
+          "type": "string"
+        },
         "fieldTest": {
           "title": "Field Test",
           "description": "Enable this if you have a field test account. Leave blank if you are not sure.",

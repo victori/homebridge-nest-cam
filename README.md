@@ -13,6 +13,7 @@ View your Nest cams in HomeKit using [Homebridge](https://github.com/homebridge/
 - Set `"ffmpegCodec": "h264_vaapi"` to have stream video commands use `/dev/dri/renderD128` and upload frames with `format=nv12,hwupload`.
 - The default remains `"libx264"`, so existing software-encoding installs keep the original behavior unless the codec option is changed.
 - This change is specifically FreeBSD-focused, but it should also work on Linux hosts where VAAPI hardware H.264 encoding is available through FFmpeg.
+- The custom Homebridge UI server exposes a `/snapshot` request endpoint that returns a camera snapshot as base64-encoded JPEG data.
 
 [![NPM](https://nodei.co/npm/homebridge-nest-cam.png?compact=true)](https://nodei.co/npm/homebridge-nest-cam/)
 
@@ -67,6 +68,78 @@ Example:
 
 The VAAPI path must exist on the host running Homebridge, and the Homebridge process must have permission to open it. If FFmpeg does not list `h264_vaapi` in `ffmpeg -codecs`, keep using `libx264` or another supported encoder. For other hardware encoders, refer to the [h264 Hardware Encoders Wiki](https://github.com/Brandawg93/homebridge-nest-cam/wiki/h264-Hardware-Encoders).
 
+### Snapshot endpoints
+The custom Homebridge UI server supports a snapshot request endpoint for authenticated UI clients:
+
+```
+const snapshot = await homebridge.request('/snapshot', {
+  uuid: 'camera-uuid',
+  height: 720
+});
+```
+
+The endpoint returns JPEG data encoded as base64:
+
+```
+{
+  "contentType": "image/jpeg",
+  "data": "<base64-jpeg>"
+}
+```
+
+The `uuid` must match one of the Nest camera UUIDs returned by the `/cameras` UI request. The optional `height` value defaults to `720`.
+
+For clients that need image bytes directly from the Homebridge UI context, the UI server also starts a localhost-only HTTP endpoint while the custom UI server is running. Ask the UI server for the URL:
+
+```
+const endpoint = await homebridge.request('/snapshot-url', {
+  uuid: 'camera-uuid',
+  height: 720
+});
+```
+
+Then request the returned URL. It responds with `Content-Type: image/jpeg`:
+
+```
+curl "$endpoint.url" -o snapshot.jpg
+```
+
+The raw HTTP endpoint has this shape:
+
+```
+http://127.0.0.1:<port>/snapshot?uuid=camera-uuid&height=720
+```
+
+For fully remote clients with no Homebridge UI context, enable the main plugin snapshot HTTP endpoint:
+
+```
+{
+    "platform": "Nest-cam",
+    "options": {
+      "snapshotHost": "0.0.0.0",
+      "snapshotPort": 50525,
+      "snapshotToken": "change-this-token"
+    },
+    "refreshToken": "1//01T_..."
+}
+```
+
+Then request snapshots from another machine:
+
+```
+curl 'http://homebridge.local:50525/snapshot?uuid=camera-uuid&height=720&token=change-this-token' -o snapshot.jpg
+```
+
+The remote endpoint also accepts the token as a bearer token:
+
+```
+curl 'http://homebridge.local:50525/snapshot?uuid=camera-uuid&height=720' \
+  -H 'Authorization: Bearer change-this-token' \
+  -o snapshot.jpg
+```
+
+The response is raw JPEG image data with `Content-Type: image/jpeg`. Both `snapshotPort` and `snapshotToken` are required before the remote endpoint will start.
+
 ### Setting up the Config.json
 #### refreshToken
 Google Accounts are configured using a `"refreshToken"` string in `config.json`. An example is shown below. The field will be generated automatically when using [homebridge-config-ui-x](https://www.npmjs.com/package/homebridge-config-ui-x), otherwise, it can be found in your Nest account using the [manual authentication method](https://github.com/Brandawg93/homebridge-nest-cam/wiki/Manual-Authentication).
@@ -104,6 +177,9 @@ Extra options can be enabled/disabled depending on which switches and sensors yo
 | pathToFfmpeg      | Specify the path to a custom FFmpeg binary                          | string           |
 | cameras           | Specify the camera UUID  of which cameras to see                    | array            |
 | structures        | Specify the structure ID of which structures' cameras to see        | array            |
+| snapshotHost      | Host/IP address for the optional remote snapshot endpoint           | string           |
+| snapshotPort      | Port for the optional remote snapshot endpoint                      | number           |
+| snapshotToken     | Required token for the optional remote snapshot endpoint            | string           |
 
 ## Features
 - View cameras within homekit.

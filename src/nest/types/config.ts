@@ -26,6 +26,9 @@ interface Options {
   pathToFfmpeg?: string;
   structures?: Array<string>;
   cameras?: Array<string>;
+  snapshotHost?: string;
+  snapshotPort?: number;
+  snapshotToken?: string;
 }
 
 export interface NestConfig extends PlatformConfig {
